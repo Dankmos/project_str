@@ -1,11 +1,21 @@
 import pygame as pg
+import numpy as np
 import math as mh
 import random
 import sys
 
 pg.init()
 
-# music
+'''
+setting up music
+you can add something else
+
+TODO
+1) add more music from those times
+2) add ability to choose music or skip it
+3) add 'mute' button
+'''
+
 pg.mixer.init()
 pg.mixer.music.load("textures//creedence-clearwater-revival_-_fortunate-son.mp3")
 pg.mixer.music.play()
@@ -13,7 +23,9 @@ pg.mixer.music.play()
 clock = pg.time.Clock()
 dis = pg.display.set_mode((800, 600))
 
-#uploading images
+'''
+uploading images from folder 'textures'
+'''
 
 bgimg = pg.image.load("textures//1548706982174921911.png")
 bgimg = pg.transform.scale(bgimg, (800, 600))
@@ -50,16 +62,26 @@ rpg_img_temp = pg.image.load("textures//rpg.png")
 boom_img = pg.image.load("textures//boom1.png")
 boom_img = pg.transform.scale(boom_img, (270, 150))
 
-# text
+'''
+setting up font and color for text in the game
+here are fonts for 'score' and 'You lose!'
+'''
 
 font = pg.freetype.Font('textures//GenJyuuGothicX-Bold.ttf', 80)
 scorefont = pg.freetype.Font('textures//GenJyuuGothicX-Bold.ttf', 20)
+lvlfont = pg.freetype.Font('textures//GenJyuuGothicX-Bold.ttf', 20)
 
 text, _ = font.render("You lose!", (255, 0, 0))
 score = 0
 
-# all about player
+'''
+class contains all inf about player
+pos, lifes, rotation and speed, is player dead
 
+also defines what player can do
+now there are moving, dropping bomb(realised in Controlling)
+and dying
+'''
 class Player:
     def __init__(self):
         self.pos = [0, 0]
@@ -70,7 +92,7 @@ class Player:
         self.death_timer = 180
         
     def Move(self):
-        self.pos[0] += self.rotation
+        self.pos[0] += self.rotation * 0.6
         
         if self.pos[0] < -300:
             self.pos[0] = 800
@@ -83,10 +105,16 @@ class Player:
         
         if event[0]:
             self.rotation += 0.7
+            
+            if self.rotation > 30:
+                self.rotation = np.sign(self.rotation) * 30
             player_img_temp = pg.transform.rotate(player_img, -self.rotation)
             
         elif event[1]:
             self.rotation -= 0.7
+            
+            if -30 > self.rotation:
+                self.rotation = np.sign(self.rotation) * 30
             player_img_temp = pg.transform.rotate(player_img, -self.rotation)
             
         elif event[2]:
@@ -108,7 +136,13 @@ class Player:
             pg.quit()
             sys.exit()
         
-# Boom motherfucker
+'''
+Boom motherfucker
+
+class contains inf about bombs
+pos, speed, is exploded
+and defines moving
+'''
 
 class Bomb:
     def __init__(self, x, y):
@@ -125,8 +159,19 @@ class Bomb:
             self.pos[1] += self.speed
             self.speed += self.gravi
     
-#they're on trees, Johnny!    
-    
+'''
+they're on trees, Johnny!
+
+this class contains inf about enemy
+his pos, is it Boss, how many lifes
+also it defines all actions
+shooting for Boss if the only thing for now
+
+TODO
+1)make something else
+for example some guks can move (done)
+'''
+  
 class Guk:
     def __init__(self, B, l):
         self.on_tree = random.choice((True, False, False))
@@ -137,6 +182,19 @@ class Guk:
         self.RPG_pos = [-100, -100]
         self.xs = 0
         self.ys = 0
+        self.moves = False
+        if not self.on_tree:
+            self.moves = random.choice([True] + [False] * 2)
+        self.speed = random.choice((1, -1))
+        
+    def moving(self):
+        self.pos[0] += self.speed
+        
+        if 0 > self.pos[0] or self.pos[0] > 750:
+            # print(self.pos[0])
+            self.speed = -self.speed
+            self.pos[0] += self.speed * 2
+            
         
     def Shoot(self, p_pos):
         global rpg_img_temp, rpg_img
@@ -168,10 +226,18 @@ class Guk:
         if 800 < self.RPG_pos[0] < 0 or self.RPG_pos[1] < 0:
             self.RPG_pos = [-100, -100]
 
-# main game
+'''
+main game
+
+this class stores all inf about current situation in a game
+also it defines all actions in a game
+dropping bombs by player, spawning enemys
+and main process of game
+'''
 
 class Game:
     def __init__(self):
+        self.level = 1
         self.guks = []
         self.bombs = []
         self.player = Player()
@@ -182,13 +248,16 @@ class Game:
         self.bombs.append(Bomb(self.player.pos[0] + 100, self.player.pos[1] + 100))
         
     def Spawn(self):
-        if len(self.guks) < 2 and not self.on_boss:
-            self.guks.append(Guk(False, 1))
+        if len(self.guks) < self.level + 1 and not self.on_boss:
+            lifes = 1
+            self.guks.append(Guk(False, lifes))
         elif len(self.guks) == 0 and self.on_boss:
-            self.guks.append(Guk(True, 3))
+            lifes = 3 * self.level
+            self.guks.append(Guk(True, lifes))
             
     def Running(self):
         global move_dir, score
+        
         if not self.player.is_dead:
             self.player.Move()
             game.player.Controlling(move_dir)
@@ -196,6 +265,7 @@ class Game:
             
             for b in self.bombs:
                 b.Dropping()
+                
                 if b.pos[1] > 550:
                     for g in self.guks:
                         if g.pos[0] - 31 < b.pos[0] < g.pos[0] + 90:
@@ -208,15 +278,19 @@ class Game:
                 if b.timer <= 0:
                     self.bombs.remove(b)
                     
-            if not self.guks_killed % 10:
+            if not self.guks_killed % (10 * self.level):
                 self.on_boss = True
                 self.guks_killed = 1
                     
             for g in self.guks:
+                if g.moves:
+                    g.moving()
+                    
                 if g.life <= 0:
                     if g.is_Boss:
                         self.on_boss = False
                         score += 9
+                        self.level += 1
                         
                     score += 1
                     self.guks.remove(g)
@@ -231,12 +305,20 @@ class Game:
 game = Game()
 move_dir = [0] * 5
 
-# cycle to start
+'''
+Main Cycle
+
+here are all about running game
+also this cycle displays image
+
+TODO
+1) make function for displaying image
+it's not the best way to show image by using main cycle
+2) move checking events from here to class Player or class Game
+3) create another way to keep inf about events instead of using list
+'''
 
 while True:
-    
-    # controls are in this cycle
-    
     for event in pg.event.get():
         if event.type == pg.QUIT:
             pg.quit()
@@ -258,6 +340,10 @@ while True:
             elif event.key == pg.K_SPACE:
                 move_dir[4] = 1
                 game.Drop_bomb()
+                
+            elif event.key -- pg.K_ESCAPE:
+                pg.quit()
+                sys.exit()
                 
         if event.type == pg.KEYUP:
             if event.key == pg.K_RIGHT:
@@ -303,7 +389,13 @@ while True:
         dis.blit(text, (200, 260))
         
     dis.blit(grass_img, (0, 500))
+    
+    #rendering text
+    lvlimg, _ = scorefont.render('level: {}'.format(game.level))
     scoreimg, _ = scorefont.render('score: {}'.format(score)) 
+    
     dis.blit(scoreimg, (700, 10))
+    dis.blit(lvlimg, (10, 10))
+    
     clock.tick(60)
     pg.display.update()
